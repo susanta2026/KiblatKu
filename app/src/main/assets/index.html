@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#065f46" />
   <meta name="description" content="KiblatKu - Aplikasi Pencari Arah Kiblat Akurat, Gratis, Offline, dan 100% Tanpa Iklan" />
-  <link rel="manifest" href="manifest.json" />
   <title>KiblatKu — Arah Kiblat Akurat &amp; Bebas Iklan</title>
   <style>
     :root {
@@ -170,6 +169,11 @@
       cursor: pointer;
     }
 
+    .btn-secondary.active-toggle {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+    }
+
     .status-box {
       font-size: 0.82rem;
       padding: 10px 12px;
@@ -270,7 +274,6 @@
       cursor: grabbing;
     }
 
-    /* Fixed top phone pointer */
     .phone-pointer {
       position: absolute;
       top: -8px;
@@ -502,11 +505,15 @@
 
       <div class="sim-box">
         <div class="sim-header">
-          <span id="sensorModeLabel">Mode: Sensor / Simulasi Manual</span>
+          <span id="sensorModeLabel">Mode: Menunggu Sensor Kompas...</span>
           <span id="simDegLabel">0&deg;</span>
         </div>
         <input type="range" id="simSlider" min="0" max="359" value="0" />
       </div>
+
+      <button class="btn-secondary" id="btnInvert180" type="button" style="width:100%; font-size:0.8rem;">
+        Balik Arah 180&deg; (Normal)
+      </button>
     </section>
 
     <!-- Pilihan Kota & Koordinat Manual -->
@@ -548,7 +555,7 @@
     <section class="card calibration-tip">
       <div class="fig8">&#8734;</div>
       <div>
-        <strong>Kalibrasi Kompas:</strong> Gerakkan HP membentuk pola <strong>angka 8</strong> di udara dan jauhkan dari benda logam atau magnet agar pembacaan sensor kompas akurat.
+        <strong>Kalibrasi Kompas:</strong> Gerakkan HP membentuk pola <strong>angka 8</strong> di udara dan jauhkan dari casing magnet atau benda logam agar kompas magnetik akurat.
       </div>
     </section>
 
@@ -558,7 +565,6 @@
   </div>
 
   <script>
-    // Koordinat Presisi Ka'bah (Masjidil Haram, Makkah)
     const KAABA_LAT = 21.422487;
     const KAABA_LON = 39.826206;
 
@@ -567,7 +573,9 @@
     let qiblaBearing = 295.1;
     let currentHeading = 0;
     let smoothedHeading = null;
-    let hasHardwareCompass = false;
+    let usingNativeCompass = false;
+    let hasWebCompass = false;
+    let invert180 = false;
     let wasAligned = false;
 
     const elStatus = document.getElementById("gpsStatus");
@@ -584,31 +592,22 @@
     const elLonInput = document.getElementById("lonInput");
     const elCitySelect = document.getElementById("citySelect");
     const btnSensorPerm = document.getElementById("btnSensorPerm");
+    const btnInvert180 = document.getElementById("btnInvert180");
 
-    function toRad(deg) {
-      return (deg * Math.PI) / 180;
-    }
+    function toRad(deg) { return (deg * Math.PI) / 180; }
+    function toDeg(rad) { return (rad * 180) / Math.PI; }
 
-    function toDeg(rad) {
-      return (rad * 180) / Math.PI;
-    }
-
-    // Rumus Great Circle Bearing menuju Ka'bah
     function calculateQibla(lat, lon) {
       const phi1 = toRad(lat);
       const phi2 = toRad(KAABA_LAT);
       const dLambda = toRad(KAABA_LON - lon);
-
       const y = Math.sin(dLambda) * Math.cos(phi2);
       const x =
         Math.cos(phi1) * Math.sin(phi2) -
         Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
-
-      const bearing = (toDeg(Math.atan2(y, x)) + 360) % 360;
-      return bearing;
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
     }
 
-    // Rumus Haversine Jarak ke Ka'bah (km)
     function calculateDistanceKm(lat, lon) {
       const R = 6371;
       const dLat = toRad(KAABA_LAT - lat);
@@ -635,7 +634,6 @@
       elQiblaAngle.textContent = qiblaBearing.toFixed(1) + "\u00B0";
       elDistance.textContent = Math.round(dist).toLocaleString("id-ID") + " km";
 
-      // Posisikan jarum Ka'bah di piringan kompas sesuai sudut kiblat dari Utara
       elQiblaPointer.style.transform = `rotate(${qiblaBearing}deg)`;
       updateCompassUI(currentHeading);
 
@@ -645,16 +643,33 @@
       }
     }
 
+    function applyHeadingWithSmoothing(rawHeading) {
+      const adjusted = invert180 ? (rawHeading + 180) % 360 : rawHeading;
+      if (smoothedHeading === null) {
+        smoothedHeading = adjusted;
+      } else {
+        let delta = ((adjusted - smoothedHeading + 540) % 360) - 180;
+        smoothedHeading = (smoothedHeading + delta * 0.25 + 360) % 360;
+      }
+      updateCompassUI(smoothedHeading);
+    }
+
+    // Dipanggil langsung oleh sensor magnetik asli Android (MainActivity.kt)
+    window.updateNativeCompass = function(azimuth) {
+      if (typeof azimuth !== "number" || isNaN(azimuth)) return;
+      usingNativeCompass = true;
+      elSensorMode.textContent = "Mode: Kompas Magnetik HP (Akurat)";
+      applyHeadingWithSmoothing(azimuth);
+    };
+
     function updateCompassUI(heading) {
       currentHeading = ((heading % 360) + 360) % 360;
       elHeading.textContent = Math.round(currentHeading) + "\u00B0";
       elSimDegLabel.textContent = Math.round(currentHeading) + "\u00B0";
       elSimSlider.value = Math.round(currentHeading);
 
-      // Putar piringan kompas berlawanan arah hadap HP agar Utara menunjuk Utara nyata
       elDial.style.transform = `rotate(${-currentHeading}deg)`;
 
-      // Hitung selisih sudut antara arah hadap HP dan arah Kiblat
       let diff = ((qiblaBearing - currentHeading + 540) % 360) - 180;
       const absDiff = Math.abs(diff);
 
@@ -673,7 +688,6 @@
       }
     }
 
-    // Fungsi Utama Izin & Deteksi GPS
     function requestGPS() {
       if (!("geolocation" in navigator)) {
         elStatus.className = "status-box error";
@@ -690,7 +704,6 @@
           updateLocation(pos.coords.latitude, pos.coords.longitude, "GPS Perangkat" + acc);
         },
         (err) => {
-          // Jika High Accuracy timeout, coba fallback ke akurasi standar/jaringan
           if (err.code === 3) {
             navigator.geolocation.getCurrentPosition(
               (posFallback) => {
@@ -709,7 +722,7 @@
           elStatus.className = "status-box error";
           if (err.code === 1) {
             elStatus.innerHTML =
-              "<strong>Izin GPS ditolak.</strong> Aktifkan izin Lokasi untuk aplikasi/browser ini di Pengaturan HP, lalu tekan tombol deteksi GPS lagi.";
+              "<strong>Izin GPS ditolak.</strong> Aktifkan izin Lokasi untuk aplikasi ini di Pengaturan HP, lalu tekan tombol deteksi GPS lagi.";
           } else {
             elStatus.innerHTML =
               "<strong>Sinyal GPS tidak tersedia.</strong> Aktifkan GPS di panel cepat HP Anda atau pilih kota dari daftar di bawah.";
@@ -719,30 +732,22 @@
       );
     }
 
-    // Sensor Kompas Perangkat (Android & iOS)
-    function handleOrientation(event) {
-      let heading = null;
+    // Fallback sensor browser (hanya dipakai jika tidak berjalan di dalam APK native)
+    function handleWebOrientation(event) {
+      if (usingNativeCompass) return;
 
+      let heading = null;
       if (typeof event.webkitCompassHeading === "number") {
         heading = event.webkitCompassHeading;
-      } else if (event.alpha !== null) {
+      } else if (event.absolute === true && event.alpha !== null) {
         heading = (360 - event.alpha) % 360;
       }
 
       if (heading === null || isNaN(heading)) return;
 
-      hasHardwareCompass = true;
-      elSensorMode.textContent = "Mode: Sensor Kompas Aktif";
-
-      // Smoothing sudut melingkar agar jarum tidak bergetar
-      if (smoothedHeading === null) {
-        smoothedHeading = heading;
-      } else {
-        let delta = ((heading - smoothedHeading + 540) % 360) - 180;
-        smoothedHeading = (smoothedHeading + delta * 0.25 + 360) % 360;
-      }
-
-      updateCompassUI(smoothedHeading);
+      hasWebCompass = true;
+      elSensorMode.textContent = "Mode: Sensor Kompas Browser";
+      applyHeadingWithSmoothing(heading);
     }
 
     function initCompassSensors() {
@@ -755,7 +760,7 @@
           try {
             const state = await DeviceOrientationEvent.requestPermission();
             if (state === "granted") {
-              window.addEventListener("deviceorientation", handleOrientation, true);
+              window.addEventListener("deviceorientation", handleWebOrientation, true);
               btnSensorPerm.style.display = "none";
             }
           } catch (e) {
@@ -763,14 +768,25 @@
           }
         });
       } else {
-        window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+        window.addEventListener("deviceorientationabsolute", handleWebOrientation, true);
         window.addEventListener("deviceorientation", (e) => {
-          if (!hasHardwareCompass) handleOrientation(e);
+          if (!hasWebCompass && !usingNativeCompass) handleWebOrientation(e);
         }, true);
       }
     }
 
-    // Simulasi Manual via Slider & Sentuhan Kompas
+    btnInvert180.addEventListener("click", () => {
+      invert180 = !invert180;
+      smoothedHeading = null;
+      if (invert180) {
+        btnInvert180.textContent = "Balik Arah 180\u00B0 (Aktif +180\u00B0)";
+        btnInvert180.classList.add("active-toggle");
+      } else {
+        btnInvert180.textContent = "Balik Arah 180\u00B0 (Normal)";
+        btnInvert180.classList.remove("active-toggle");
+      }
+    });
+
     elSimSlider.addEventListener("input", (e) => {
       elSensorMode.textContent = "Mode: Simulasi Manual";
       updateCompassUI(parseFloat(e.target.value));
@@ -800,7 +816,6 @@
     }, { passive: true });
     stage.addEventListener("touchend", () => { isDragging = false; });
 
-    // Event Listener Tombol & Kota
     document.getElementById("btnGps").addEventListener("click", requestGPS);
 
     elCitySelect.addEventListener("change", (e) => {
@@ -819,7 +834,6 @@
       updateLocation(lat, lon, "Koordinat Manual");
     });
 
-    // Mode Gelap / Terang
     const themeBtn = document.getElementById("themeToggle");
     themeBtn.addEventListener("click", () => {
       const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -832,12 +846,6 @@
       }
     });
 
-    // Daftarkan Service Worker untuk Offline PWA
-    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
-
-    // Inisialisasi awal & otomatis minta izin GPS saat dibuka
     updateLocation(userLat, userLon, null);
     initCompassSensors();
     window.addEventListener("load", () => {
