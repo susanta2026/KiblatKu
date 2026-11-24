@@ -41,21 +41,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private lateinit var prefs: SharedPreferences
 
     private var accelerometer: Sensor? = null
-    private var uncalibratedMag: Sensor? = null
     private var calibratedMag: Sensor? = null
-    private var gyroscope: Sensor? = null
+    private var rotationVector: Sensor? = null
 
     private val gravity = FloatArray(3)
     private val geomagnetic = FloatArray(3)
     private var hasGravity = false
     private var hasMagnetic = false
 
-    // Kalibrasi Hard-Iron Permanen (disimpan di SharedPreferences)
-    private var offsetX = 0f
-    private var offsetY = 0f
-    private var offsetZ = 0f
-    private var baselineUt = 42f
-    private var isCalibratedLocked = false
+    // Kalibrasi Bola 3D (X, Y, Z) untuk koreksi residu hard-iron
+    private var biasX = 0f
+    private var biasY = 0f
+    private var biasZ = 0f
+    private var is3dCalibrated = false
 
     private var minX = Float.MAX_VALUE
     private var maxX = -Float.MAX_VALUE
@@ -63,11 +61,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var maxY = -Float.MAX_VALUE
     private var minZ = Float.MAX_VALUE
     private var maxZ = -Float.MAX_VALUE
-    private var calSampleCount = 0
+    private var validSampleCount = 0
 
-    // Complementary Filter (Giroskop + Magnetometer)
-    private var fusedAzimuth = -1f
-    private var lastGyroTimestampNs = 0L
+    // Low-pass sudut sirkular agar jarum stabil & tidak melompat
+    private var smoothAzimuth = -1f
     private var magneticAccuracy = SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM
     private var magneticFieldUt = 0f
 
@@ -93,16 +90,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        prefs = getSharedPreferences("KiblatKuCompassPrefs", Context.MODE_PRIVATE)
+        prefs = getSharedPreferences("KiblatKuCompass3DPrefs", Context.MODE_PRIVATE)
         loadSavedCalibration()
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        uncalibratedMag = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED)
         calibratedMag = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-        gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
 
         webView = WebView(this)
         setContentView(webView)
@@ -138,42 +134,38 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     }
 
     private fun loadSavedCalibration() {
-        isCalibratedLocked = prefs.getBoolean("cal_locked", false)
-        offsetX = prefs.getFloat("offset_x", 0f)
-        offsetY = prefs.getFloat("offset_y", 0f)
-        offsetZ = prefs.getFloat("offset_z", 0f)
-        baselineUt = prefs.getFloat("baseline_ut", 42f)
+        is3dCalibrated = prefs.getBoolean("cal3d_locked", false)
+        biasX = prefs.getFloat("bias_x", 0f)
+        biasY = prefs.getFloat("bias_y", 0f)
+        biasZ = prefs.getFloat("bias_z", 0f)
     }
 
-    private fun saveCalibration(ox: Float, oy: Float, oz: Float, baseUt: Float) {
-        offsetX = ox
-        offsetY = oy
-        offsetZ = oz
-        baselineUt = baseUt
-        isCalibratedLocked = true
+    private fun saveCalibration(bx: Float, by: Float, bz: Float) {
+        biasX = bx
+        biasY = by
+        biasZ = bz
+        is3dCalibrated = true
         prefs.edit()
-            .putBoolean("cal_locked", true)
-            .putFloat("offset_x", ox)
-            .putFloat("offset_y", oy)
-            .putFloat("offset_z", oz)
-            .putFloat("baseline_ut", baseUt)
+            .putBoolean("cal3d_locked", true)
+            .putFloat("bias_x", bx)
+            .putFloat("bias_y", by)
+            .putFloat("bias_z", bz)
             .apply()
     }
 
     private fun resetSavedCalibration() {
-        isCalibratedLocked = false
-        offsetX = 0f
-        offsetY = 0f
-        offsetZ = 0f
-        baselineUt = 42f
+        is3dCalibrated = false
+        biasX = 0f
+        biasY = 0f
+        biasZ = 0f
         minX = Float.MAX_VALUE
         maxX = -Float.MAX_VALUE
         minY = Float.MAX_VALUE
         maxY = -Float.MAX_VALUE
         minZ = Float.MAX_VALUE
         maxZ = -Float.MAX_VALUE
-        calSampleCount = 0
-        fusedAzimuth = -1f
+        validSampleCount = 0
+        smoothAzimuth = -1f
         prefs.edit().clear().apply()
         triggerVibration(longArrayOf(0, 50))
     }
@@ -212,18 +204,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     override fun onResume() {
         super.onResume()
-        lastGyroTimestampNs = 0L
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-        if (uncalibratedMag != null) {
-            sensorManager.registerListener(this, uncalibratedMag, SensorManager.SENSOR_DELAY_GAME)
-        } else {
-            calibratedMag?.let {
-                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-            }
+        calibratedMag?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-        gyroscope?.let {
+        rotationVector?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
         startNativeLocationUpdates()
@@ -296,7 +283,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                val alpha = 0.2f
+                val alpha = 0.18f
                 if (!hasGravity) {
                     System.arraycopy(event.values, 0, gravity, 0, 3)
                     hasGravity = true
@@ -307,61 +294,71 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                 }
             }
 
-            Sensor.TYPE_GYROSCOPE -> {
-                if (lastGyroTimestampNs != 0L && hasGravity && fusedAzimuth >= 0f) {
-                    val dt = (event.timestamp - lastGyroTimestampNs) * 1e-9f
-                    if (dt in 0.0001f..0.2f) {
-                        val gNorm = sqrt(
-                            gravity[0] * gravity[0] +
-                            gravity[1] * gravity[1] +
-                            gravity[2] * gravity[2]
-                        )
-                        if (gNorm > 1f) {
-                            val gx = gravity[0] / gNorm
-                            val gy = gravity[1] / gNorm
-                            val gz = gravity[2] / gNorm
-                            val omegaVertical = -(event.values[0] * gx + event.values[1] * gy + event.values[2] * gz)
-                            val deltaDeg = Math.toDegrees((omegaVertical * dt).toDouble()).toFloat()
-                            fusedAzimuth = (fusedAzimuth + deltaDeg + 360f) % 360f
-                        }
-                    }
-                }
-                lastGyroTimestampNs = event.timestamp
-            }
-
-            Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED -> {
-                val rawX = event.values[0]
-                val rawY = event.values[1]
-                val rawZ = event.values[2]
-
-                if (!isCalibratedLocked) {
-                    if (offsetX == 0f && offsetY == 0f && event.values.size >= 6) {
-                        offsetX = event.values[3]
-                        offsetY = event.values[4]
-                        offsetZ = event.values[5]
-                    }
-                    updateCalibrationBounds(rawX, rawY, rawZ)
-                }
-
-                val calX = rawX - offsetX
-                val calY = rawY - offsetY
-                val calZ = rawZ - offsetZ
-                processCalibratedMagnetic(calX, calY, calZ)
-            }
-
             Sensor.TYPE_MAGNETIC_FIELD -> {
                 magneticAccuracy = event.accuracy
-                processCalibratedMagnetic(event.values[0], event.values[1], event.values[2])
+                val mx = event.values[0]
+                val my = event.values[1]
+                val mz = event.values[2]
+
+                if (!is3dCalibrated) {
+                    collect3dCalibrationSamples(mx, my, mz)
+                }
+
+                val cx = mx - biasX
+                val cy = my - biasY
+                val cz = mz - biasZ
+                magneticFieldUt = sqrt(cx * cx + cy * cy + cz * cz)
+
+                val alpha = 0.2f
+                if (!hasMagnetic) {
+                    geomagnetic[0] = cx
+                    geomagnetic[1] = cy
+                    geomagnetic[2] = cz
+                    hasMagnetic = true
+                } else {
+                    geomagnetic[0] += alpha * (cx - geomagnetic[0])
+                    geomagnetic[1] += alpha * (cy - geomagnetic[1])
+                    geomagnetic[2] += alpha * (cz - geomagnetic[2])
+                }
+
+                // Gunakan matriks rotasi 3D jika kalibrasi 3D sudah terkunci atau RotationVector tidak tersedia
+                if (is3dCalibrated || rotationVector == null) {
+                    computeAzimuthFromGravityAndMag()
+                }
+            }
+
+            Sensor.TYPE_ROTATION_VECTOR -> {
+                if (!is3dCalibrated) {
+                    val rotMat = FloatArray(9)
+                    val orient = FloatArray(3)
+                    SensorManager.getRotationMatrixFromVector(rotMat, event.values)
+                    val targetMat = if (hasGravity && abs(gravity[2]) < 4.5f) {
+                        val remapped = FloatArray(9)
+                        SensorManager.remapCoordinateSystem(
+                            rotMat,
+                            SensorManager.AXIS_X,
+                            SensorManager.AXIS_Z,
+                            remapped
+                        )
+                        remapped
+                    } else {
+                        rotMat
+                    }
+                    SensorManager.getOrientation(targetMat, orient)
+                    var rawAz = Math.toDegrees(orient[0].toDouble()).toFloat() + cachedDeclination
+                    rawAz = (rawAz + 360f) % 360f
+                    applyCircularSmoothing(rawAz)
+                }
             }
         }
 
         val now = System.currentTimeMillis()
-        if (now - lastUiPushMillis >= 18 && fusedAzimuth >= 0f) {
+        if (now - lastUiPushMillis >= 20 && smoothAzimuth >= 0f) {
             lastUiPushMillis = now
-            val headingOut = fusedAzimuth
+            val headingOut = smoothAzimuth
             val utRounded = Math.round(magneticFieldUt)
-            val accLevel = if (isCalibratedLocked) 3 else magneticAccuracy
-            val calLockedFlag = if (isCalibratedLocked) 1 else 0
+            val accLevel = if (is3dCalibrated) 3 else magneticAccuracy
+            val calLockedFlag = if (is3dCalibrated) 1 else 0
 
             webView.post {
                 webView.evaluateJavascript(
@@ -372,47 +369,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
-    private fun updateCalibrationBounds(rawX: Float, rawY: Float, rawZ: Float) {
-        val rawMag = sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ)
-        if (rawMag !in 12f..120f) return
+    private fun collect3dCalibrationSamples(mx: Float, my: Float, mz: Float) {
+        val rawUt = sqrt(mx * mx + my * my + mz * mz)
+        // Hanya rekam sampel medan magnet bumi normal (22 - 75 uT)
+        if (rawUt !in 22f..75f) return
 
-        minX = min(minX, rawX)
-        maxX = max(maxX, rawX)
-        minY = min(minY, rawY)
-        maxY = max(maxY, rawY)
-        minZ = min(minZ, rawZ)
-        maxZ = max(maxZ, rawZ)
-        calSampleCount++
+        minX = min(minX, mx)
+        maxX = max(maxX, mx)
+        minY = min(minY, my)
+        maxY = max(maxY, my)
+        minZ = min(minZ, mz)
+        maxZ = max(maxZ, mz)
+        validSampleCount++
 
         val spanX = maxX - minX
         val spanY = maxY - minY
-        if (calSampleCount >= 35 && spanX >= 36f && spanY >= 36f) {
-            val newOx = (maxX + minX) * 0.5f
-            val newOy = (maxY + minY) * 0.5f
-            val newOz = if ((maxZ - minZ) >= 55f) (maxZ + minZ) * 0.5f else offsetZ
-            val estBaseUt = sqrt((spanX * 0.5f) * (spanX * 0.5f) + (spanY * 0.5f) * (spanY * 0.5f)).coerceIn(22f, 65f)
-            saveCalibration(newOx, newOy, newOz, estBaseUt)
-            triggerVibration(longArrayOf(0, 60))
+        val spanZ = maxZ - minZ
+
+        // Wajib terkalibrasi penuh di ketiga sumbu (X, Y, dan Z) lewat gerakan angka 8
+        if (validSampleCount >= 60 && spanX >= 45f && spanY >= 45f && spanZ >= 45f) {
+            val bx = (maxX + minX) * 0.5f
+            val by = (maxY + minY) * 0.5f
+            val bz = (maxZ + minZ) * 0.5f
+            saveCalibration(bx, by, bz)
+            triggerVibration(longArrayOf(0, 65))
         }
     }
 
-    private fun processCalibratedMagnetic(bx: Float, by: Float, bz: Float) {
-        magneticFieldUt = sqrt(bx * bx + by * by + bz * bz)
-
-        val alpha = 0.22f
-        if (!hasMagnetic) {
-            geomagnetic[0] = bx
-            geomagnetic[1] = by
-            geomagnetic[2] = bz
-            hasMagnetic = true
-        } else {
-            geomagnetic[0] += alpha * (bx - geomagnetic[0])
-            geomagnetic[1] += alpha * (by - geomagnetic[1])
-            geomagnetic[2] += alpha * (bz - geomagnetic[2])
-        }
-
-        if (!hasGravity) return
-
+    private fun computeAzimuthFromGravityAndMag() {
+        if (!hasGravity || !hasMagnetic) return
         val rotationMatrix = FloatArray(9)
         val orientation = FloatArray(3)
         if (SensorManager.getRotationMatrix(rotationMatrix, null, gravity, geomagnetic)) {
@@ -428,22 +413,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             } else {
                 rotationMatrix
             }
-
             SensorManager.getOrientation(targetMatrix, orientation)
-            var magAzimuth = Math.toDegrees(orientation[0].toDouble()).toFloat() + cachedDeclination
-            magAzimuth = (magAzimuth + 360f) % 360f
+            var rawAz = Math.toDegrees(orientation[0].toDouble()).toFloat() + cachedDeclination
+            rawAz = (rawAz + 360f) % 360f
+            applyCircularSmoothing(rawAz)
+        }
+    }
 
-            if (fusedAzimuth < 0f) {
-                fusedAzimuth = magAzimuth
-            } else {
-                // Jika terdeteksi lonjakan medan magnet (logam/speaker), tahan arah pakai giroskop saja
-                val hasSpike = isCalibratedLocked && abs(magneticFieldUt - baselineUt) > 18f
-                val magWeight = if (hasSpike) 0f else 0.06f
-                if (magWeight > 0f) {
-                    val diff = ((magAzimuth - fusedAzimuth + 540f) % 360f) - 180f
-                    fusedAzimuth = (fusedAzimuth + magWeight * diff + 360f) % 360f
-                }
-            }
+    private fun applyCircularSmoothing(newAzimuth: Float) {
+        if (smoothAzimuth < 0f) {
+            smoothAzimuth = newAzimuth
+        } else {
+            val diff = ((newAzimuth - smoothAzimuth + 540f) % 360f) - 180f
+            smoothAzimuth = (smoothAzimuth + 0.18f * diff + 360f) % 360f
         }
     }
 
