@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#065f46" />
+  <meta name="description" content="KiblatKu - Aplikasi Pencari Arah Kiblat Akurat, Gratis, Offline, dan 100% Tanpa Iklan" />
+  <link rel="manifest" href="manifest.json" />
+  <title>KiblatKu — Arah Kiblat Akurat &amp; Bebas Iklan</title>
+  <style>
+    :root {
+      --bg: #f3f6f4;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #4b5563;
+      --primary: #065f46;
+      --primary-light: #10b981;
+      --accent: #d97706;
+      --border: #e5e7eb;
+      --dial-bg: #f9fafb;
+      --dial-ring: #065f46;
+      --success-bg: #ecfdf5;
+      --success-border: #10b981;
+      --warn-bg: #fffbeb;
+      --warn-border: #f59e0b;
+      --err-bg: #fef2f2;
+      --err-border: #ef4444;
+      --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0b1311;
+      --card: #13201c;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --primary: #10b981;
+      --primary-light: #34d399;
+      --accent: #fbbf24;
+      --border: #233831;
+      --dial-bg: #0f1a17;
+      --dial-ring: #10b981;
+      --success-bg: #064e3b;
+      --success-border: #34d399;
+      --warn-bg: #451a03;
+      --warn-border: #f59e0b;
+      --err-bg: #450a0a;
+      --err-border: #f87171;
+      --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      transition: background 0.25s, color 0.25s;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 2px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #065f46, #10b981);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(6, 95, 70, 0.25);
+    }
+
+    .brand h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .brand p {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .theme-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .gps-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, #065f46, #047857);
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      background: var(--dial-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .status-box {
+      font-size: 0.82rem;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--dial-bg);
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .status-box.success {
+      background: var(--success-bg);
+      border-color: var(--success-border);
+      color: var(--text);
+    }
+
+    .status-box.warn {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--text);
+    }
+
+    .status-box.error {
+      background: var(--err-bg);
+      border-color: var(--err-border);
+      color: var(--text);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+
+    .stat-item {
+      background: var(--dial-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 6px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .compass-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 0;
+    }
+
+    .alignment-banner {
+      width: 100%;
+      text-align: center;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 0.92rem;
+      background: var(--dial-bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all 0.2s ease;
+    }
+
+    .alignment-banner.aligned {
+      background: #10b981;
+      border-color: #059669;
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+    }
+
+    .compass-stage {
+      position: relative;
+      width: 270px;
+      height: 270px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      user-select: none;
+      cursor: grab;
+    }
+
+    .compass-stage:active {
+      cursor: grabbing;
+    }
+
+    /* Fixed top phone pointer */
+    .phone-pointer {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-top: 16px solid var(--accent);
+      z-index: 10;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2));
+    }
+
+    .compass-dial {
+      width: 256px;
+      height: 256px;
+      border-radius: 50%;
+      background: var(--dial-bg);
+      border: 4px solid var(--dial-ring);
+      position: relative;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.06);
+      transition: transform 0.08s linear;
+    }
+
+    .cardinal {
+      position: absolute;
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .cardinal.n { top: 10px; left: 50%; transform: translateX(-50%); color: #ef4444; }
+    .cardinal.s { bottom: 10px; left: 50%; transform: translateX(-50%); }
+    .cardinal.e { right: 12px; top: 50%; transform: translateY(-50%); }
+    .cardinal.w { left: 12px; top: 50%; transform: translateY(-50%); }
+
+    .qibla-needle-container {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .qibla-arrow {
+      position: absolute;
+      top: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .kaaba-badge {
+      background: #111827;
+      color: #fbbf24;
+      border: 2px solid #fbbf24;
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+    }
+
+    .needle-shaft {
+      width: 4px;
+      height: 82px;
+      background: linear-gradient(to top, transparent, #10b981);
+      border-radius: 4px;
+    }
+
+    .center-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 3px solid var(--card);
+      z-index: 5;
+    }
+
+    .sim-box {
+      width: 100%;
+      background: var(--dial-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sim-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    select, input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--dial-bg);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+
+    .coord-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .calibration-tip {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .fig8 {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--primary);
+      animation: pulse8 2.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse8 {
+      0%, 100% { transform: rotate(-12deg) scale(1); }
+      50% { transform: rotate(12deg) scale(1.12); }
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 6px 0 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">&#128331;</div>
+        <div>
+          <h1>KiblatKu</h1>
+          <p>Akurat &bull; Gratis &bull; Tanpa Iklan</p>
+        </div>
+      </div>
+      <button class="theme-btn" id="themeToggle" type="button">Mode Gelap</button>
+    </header>
+
+    <!-- GPS & Lokasi Card -->
+    <section class="card gps-bar">
+      <button class="btn-primary" id="btnGps" type="button">
+        <span>&#128205;</span> Izinkan &amp; Deteksi GPS Otomatis
+      </button>
+      <div class="status-box" id="gpsStatus">
+        Meminta izin lokasi GPS perangkat Anda untuk menghitung arah kiblat...
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">Sudut Kiblat</div>
+          <div class="stat-value" id="qiblaAngleVal">295.1&deg;</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Arah HP</div>
+          <div class="stat-value" id="headingVal">0&deg;</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Jarak Ka'bah</div>
+          <div class="stat-value" id="distanceVal">7.915 km</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Kompas Card -->
+    <section class="card compass-wrapper">
+      <div class="alignment-banner" id="alignBanner">
+        Putar perangkat hingga ikon Ka'bah sejajar panah atas
+      </div>
+
+      <button class="btn-secondary" id="btnSensorPerm" type="button" style="display:none;">
+        Aktifkan Sensor Kompas Perangkat
+      </button>
+
+      <div class="compass-stage" id="compassStage" title="Putar dial atau gunakan sensor kompas HP">
+        <div class="phone-pointer"></div>
+        <div class="compass-dial" id="compassDial">
+          <span class="cardinal n">U</span>
+          <span class="cardinal e">T</span>
+          <span class="cardinal s">S</span>
+          <span class="cardinal w">B</span>
+
+          <div class="qibla-needle-container" id="qiblaPointer">
+            <div class="qibla-arrow">
+              <div class="kaaba-badge">KA'BAH</div>
+              <div class="needle-shaft"></div>
+            </div>
+          </div>
+
+          <div class="center-dot"></div>
+        </div>
+      </div>
+
+      <div class="sim-box">
+        <div class="sim-header">
+          <span id="sensorModeLabel">Mode: Sensor / Simulasi Manual</span>
+          <span id="simDegLabel">0&deg;</span>
+        </div>
+        <input type="range" id="simSlider" min="0" max="359" value="0" />
+      </div>
+    </section>
+
+    <!-- Pilihan Kota & Koordinat Manual -->
+    <section class="card form-group">
+      <label for="citySelect">Pilih Kota Cepat (Jika GPS Tidak Aktif)</label>
+      <select id="citySelect">
+        <option value="-6.2383,106.9756">Bekasi (-6.2383, 106.9756)</option>
+        <option value="-6.2088,106.8456">Jakarta (-6.2088, 106.8456)</option>
+        <option value="-0.9471,100.4172">Padang (-0.9471, 100.4172)</option>
+        <option value="-6.9175,107.6191">Bandung (-6.9175, 107.6191)</option>
+        <option value="-6.7320,108.5523">Cirebon (-6.7320, 108.5523)</option>
+        <option value="-7.2575,112.7521">Surabaya (-7.2575, 112.7521)</option>
+        <option value="-7.7956,110.3695">Yogyakarta (-7.7956, 110.3695)</option>
+        <option value="-6.9667,110.4167">Semarang (-6.9667, 110.4167)</option>
+        <option value="3.5952,98.6722">Medan (3.5952, 98.6722)</option>
+        <option value="-2.9761,104.7754">Palembang (-2.9761, 104.7754)</option>
+        <option value="-5.1477,119.4327">Makassar (-5.1477, 119.4327)</option>
+        <option value="-3.3194,114.5908">Banjarmasin (-3.3194, 114.5908)</option>
+        <option value="-1.2379,116.8529">Balikpapan (-1.2379, 116.8529)</option>
+        <option value="-8.6500,115.2167">Denpasar (-8.6500, 115.2167)</option>
+        <option value="5.5483,95.3238">Banda Aceh (5.5483, 95.3238)</option>
+        <option value="0.5071,101.4478">Pekanbaru (0.5071, 101.4478)</option>
+      </select>
+
+      <div class="coord-row" style="margin-top: 6px;">
+        <div>
+          <label for="latInput">Lintang (Lat)</label>
+          <input type="number" id="latInput" step="0.0001" value="-6.2383" />
+        </div>
+        <div>
+          <label for="lonInput">Bujur (Lon)</label>
+          <input type="number" id="lonInput" step="0.0001" value="106.9756" />
+        </div>
+        <button class="btn-secondary" id="btnApplyCoord" type="button">Hitung</button>
+      </div>
+    </section>
+
+    <!-- Tips Kalibrasi -->
+    <section class="card calibration-tip">
+      <div class="fig8">&#8734;</div>
+      <div>
+        <strong>Kalibrasi Kompas:</strong> Gerakkan HP membentuk pola <strong>angka 8</strong> di udara dan jauhkan dari benda logam atau magnet agar pembacaan sensor kompas akurat.
+      </div>
+    </section>
+
+    <footer>
+      Koordinat Ka'bah: 21.422487&deg; LU, 39.826206&deg; BT &bull; 100% Bebas Iklan
+    </footer>
+  </div>
+
+  <script>
+    // Koordinat Presisi Ka'bah (Masjidil Haram, Makkah)
+    const KAABA_LAT = 21.422487;
+    const KAABA_LON = 39.826206;
+
+    let userLat = -6.2383;
+    let userLon = 106.9756;
+    let qiblaBearing = 295.1;
+    let currentHeading = 0;
+    let smoothedHeading = null;
+    let hasHardwareCompass = false;
+    let wasAligned = false;
+
+    const elStatus = document.getElementById("gpsStatus");
+    const elQiblaAngle = document.getElementById("qiblaAngleVal");
+    const elHeading = document.getElementById("headingVal");
+    const elDistance = document.getElementById("distanceVal");
+    const elDial = document.getElementById("compassDial");
+    const elQiblaPointer = document.getElementById("qiblaPointer");
+    const elAlignBanner = document.getElementById("alignBanner");
+    const elSimSlider = document.getElementById("simSlider");
+    const elSimDegLabel = document.getElementById("simDegLabel");
+    const elSensorMode = document.getElementById("sensorModeLabel");
+    const elLatInput = document.getElementById("latInput");
+    const elLonInput = document.getElementById("lonInput");
+    const elCitySelect = document.getElementById("citySelect");
+    const btnSensorPerm = document.getElementById("btnSensorPerm");
+
+    function toRad(deg) {
+      return (deg * Math.PI) / 180;
+    }
+
+    function toDeg(rad) {
+      return (rad * 180) / Math.PI;
+    }
+
+    // Rumus Great Circle Bearing menuju Ka'bah
+    function calculateQibla(lat, lon) {
+      const phi1 = toRad(lat);
+      const phi2 = toRad(KAABA_LAT);
+      const dLambda = toRad(KAABA_LON - lon);
+
+      const y = Math.sin(dLambda) * Math.cos(phi2);
+      const x =
+        Math.cos(phi1) * Math.sin(phi2) -
+        Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+
+      const bearing = (toDeg(Math.atan2(y, x)) + 360) % 360;
+      return bearing;
+    }
+
+    // Rumus Haversine Jarak ke Ka'bah (km)
+    function calculateDistanceKm(lat, lon) {
+      const R = 6371;
+      const dLat = toRad(KAABA_LAT - lat);
+      const dLon = toRad(KAABA_LON - lon);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat)) *
+          Math.cos(toRad(KAABA_LAT)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function updateLocation(lat, lon, sourceLabel) {
+      userLat = lat;
+      userLon = lon;
+      elLatInput.value = lat.toFixed(5);
+      elLonInput.value = lon.toFixed(5);
+
+      qiblaBearing = calculateQibla(lat, lon);
+      const dist = calculateDistanceKm(lat, lon);
+
+      elQiblaAngle.textContent = qiblaBearing.toFixed(1) + "\u00B0";
+      elDistance.textContent = Math.round(dist).toLocaleString("id-ID") + " km";
+
+      // Posisikan jarum Ka'bah di piringan kompas sesuai sudut kiblat dari Utara
+      elQiblaPointer.style.transform = `rotate(${qiblaBearing}deg)`;
+      updateCompassUI(currentHeading);
+
+      if (sourceLabel) {
+        elStatus.className = "status-box success";
+        elStatus.innerHTML = `<strong>Lokasi Aktif (${sourceLabel}):</strong><br>Lat: ${lat.toFixed(5)}&deg;, Lon: ${lon.toFixed(5)}&deg;`;
+      }
+    }
+
+    function updateCompassUI(heading) {
+      currentHeading = ((heading % 360) + 360) % 360;
+      elHeading.textContent = Math.round(currentHeading) + "\u00B0";
+      elSimDegLabel.textContent = Math.round(currentHeading) + "\u00B0";
+      elSimSlider.value = Math.round(currentHeading);
+
+      // Putar piringan kompas berlawanan arah hadap HP agar Utara menunjuk Utara nyata
+      elDial.style.transform = `rotate(${-currentHeading}deg)`;
+
+      // Hitung selisih sudut antara arah hadap HP dan arah Kiblat
+      let diff = ((qiblaBearing - currentHeading + 540) % 360) - 180;
+      const absDiff = Math.abs(diff);
+
+      if (absDiff <= 3) {
+        elAlignBanner.textContent = "Arah Kiblat Sudah Tepat! (" + qiblaBearing.toFixed(1) + "\u00B0)";
+        elAlignBanner.classList.add("aligned");
+        if (!wasAligned && navigator.vibrate) {
+          navigator.vibrate(60);
+        }
+        wasAligned = true;
+      } else {
+        wasAligned = false;
+        elAlignBanner.classList.remove("aligned");
+        const arahPutar = diff > 0 ? "ke Kanan (Searah Jarum Jam)" : "ke Kiri (Berlawanan Jarum Jam)";
+        elAlignBanner.textContent = `Putar ${Math.round(absDiff)}\u00B0 ${arahPutar}`;
+      }
+    }
+
+    // Fungsi Utama Izin & Deteksi GPS
+    function requestGPS() {
+      if (!("geolocation" in navigator)) {
+        elStatus.className = "status-box error";
+        elStatus.textContent = "Browser atau WebView ini tidak mendukung fitur GPS.";
+        return;
+      }
+
+      elStatus.className = "status-box warn";
+      elStatus.textContent = "Meminta izin GPS & mencari satelit lokasi akurat...";
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const acc = pos.coords.accuracy ? ` (Akurasi ±${Math.round(pos.coords.accuracy)} m)` : "";
+          updateLocation(pos.coords.latitude, pos.coords.longitude, "GPS Perangkat" + acc);
+        },
+        (err) => {
+          // Jika High Accuracy timeout, coba fallback ke akurasi standar/jaringan
+          if (err.code === 3) {
+            navigator.geolocation.getCurrentPosition(
+              (posFallback) => {
+                updateLocation(posFallback.coords.latitude, posFallback.coords.longitude, "GPS Jaringan");
+              },
+              () => {
+                elStatus.className = "status-box error";
+                elStatus.innerHTML =
+                  "<strong>Waktu pencarian GPS habis.</strong> Pastikan Lokasi/GPS di pengaturan HP sudah menyala, atau pilih kota di bawah.";
+              },
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            );
+            return;
+          }
+
+          elStatus.className = "status-box error";
+          if (err.code === 1) {
+            elStatus.innerHTML =
+              "<strong>Izin GPS ditolak.</strong> Aktifkan izin Lokasi untuk aplikasi/browser ini di Pengaturan HP, lalu tekan tombol deteksi GPS lagi.";
+          } else {
+            elStatus.innerHTML =
+              "<strong>Sinyal GPS tidak tersedia.</strong> Aktifkan GPS di panel cepat HP Anda atau pilih kota dari daftar di bawah.";
+          }
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    }
+
+    // Sensor Kompas Perangkat (Android & iOS)
+    function handleOrientation(event) {
+      let heading = null;
+
+      if (typeof event.webkitCompassHeading === "number") {
+        heading = event.webkitCompassHeading;
+      } else if (event.alpha !== null) {
+        heading = (360 - event.alpha) % 360;
+      }
+
+      if (heading === null || isNaN(heading)) return;
+
+      hasHardwareCompass = true;
+      elSensorMode.textContent = "Mode: Sensor Kompas Aktif";
+
+      // Smoothing sudut melingkar agar jarum tidak bergetar
+      if (smoothedHeading === null) {
+        smoothedHeading = heading;
+      } else {
+        let delta = ((heading - smoothedHeading + 540) % 360) - 180;
+        smoothedHeading = (smoothedHeading + delta * 0.25 + 360) % 360;
+      }
+
+      updateCompassUI(smoothedHeading);
+    }
+
+    function initCompassSensors() {
+      if (
+        typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function"
+      ) {
+        btnSensorPerm.style.display = "block";
+        btnSensorPerm.addEventListener("click", async () => {
+          try {
+            const state = await DeviceOrientationEvent.requestPermission();
+            if (state === "granted") {
+              window.addEventListener("deviceorientation", handleOrientation, true);
+              btnSensorPerm.style.display = "none";
+            }
+          } catch (e) {
+            alert("Izin sensor kompas ditolak.");
+          }
+        });
+      } else {
+        window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+        window.addEventListener("deviceorientation", (e) => {
+          if (!hasHardwareCompass) handleOrientation(e);
+        }, true);
+      }
+    }
+
+    // Simulasi Manual via Slider & Sentuhan Kompas
+    elSimSlider.addEventListener("input", (e) => {
+      elSensorMode.textContent = "Mode: Simulasi Manual";
+      updateCompassUI(parseFloat(e.target.value));
+    });
+
+    const stage = document.getElementById("compassStage");
+    let isDragging = false;
+    function handlePointerMove(clientX, clientY) {
+      const rect = stage.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const angle = (toDeg(Math.atan2(clientY - cy, clientX - cx)) + 90 + 360) % 360;
+      elSensorMode.textContent = "Mode: Putar Manual";
+      updateCompassUI((360 - angle) % 360);
+    }
+
+    stage.addEventListener("mousedown", (e) => { isDragging = true; handlePointerMove(e.clientX, e.clientY); });
+    window.addEventListener("mousemove", (e) => { if (isDragging) handlePointerMove(e.clientX, e.clientY); });
+    window.addEventListener("mouseup", () => { isDragging = false; });
+
+    stage.addEventListener("touchstart", (e) => {
+      isDragging = true;
+      if (e.touches[0]) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    stage.addEventListener("touchmove", (e) => {
+      if (isDragging && e.touches[0]) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    stage.addEventListener("touchend", () => { isDragging = false; });
+
+    // Event Listener Tombol & Kota
+    document.getElementById("btnGps").addEventListener("click", requestGPS);
+
+    elCitySelect.addEventListener("change", (e) => {
+      const [lat, lon] = e.target.value.split(",").map(Number);
+      const cityName = e.target.options[e.target.selectedIndex].text.split(" (")[0];
+      updateLocation(lat, lon, "Kota " + cityName);
+    });
+
+    document.getElementById("btnApplyCoord").addEventListener("click", () => {
+      const lat = parseFloat(elLatInput.value);
+      const lon = parseFloat(elLonInput.value);
+      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        alert("Masukkan koordinat Lintang (-90 s/d 90) dan Bujur (-180 s/d 180) yang valid.");
+        return;
+      }
+      updateLocation(lat, lon, "Koordinat Manual");
+    });
+
+    // Mode Gelap / Terang
+    const themeBtn = document.getElementById("themeToggle");
+    themeBtn.addEventListener("click", () => {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      if (isDark) {
+        document.documentElement.removeAttribute("data-theme");
+        themeBtn.textContent = "Mode Gelap";
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+        themeBtn.textContent = "Mode Terang";
+      }
+    });
+
+    // Daftarkan Service Worker untuk Offline PWA
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+
+    // Inisialisasi awal & otomatis minta izin GPS saat dibuka
+    updateLocation(userLat, userLon, null);
+    initCompassSensors();
+    window.addEventListener("load", () => {
+      setTimeout(requestGPS, 400);
+    });
+  </script>
+</body>
+</html>
